@@ -90,7 +90,7 @@ eval env (Second a) = snd (eval env a)
 eval env (Pure a) = pure (eval env a)
 eval env (Let exprs vars var computation body) = do
   computationResult <- eval env computation
-  let boxes = (mapAll (eval env) exprs)
+  let boxes = mapAll (eval env) exprs
   eval (bind [<(var, computationResult)] vars boxes) body
 eval _ (IntNum a) = a
 eval env (Absurd a) = absurd (eval env a)
@@ -98,6 +98,14 @@ eval env (AbsurdCommand a) =
   -- sorry
   -- QUESTION: Should I perform the effect?
   absurd (unsafePerformIO (eval env a))
+eval env (Lam var body) = \arg => eval (env :< (var, arg)) body
+eval env (App fun arg) = (eval env fun) (eval env arg)
+eval env (Left a) = Left (eval env a)
+eval env (Right a) = Right (eval env a)
+eval env (Case scrutinee left lbody right rbody) =
+  case eval env scrutinee of
+    Left a => eval (env :< (left, a)) lbody
+    Right b => eval (env :< (right, b)) rbody
 eval env a = ?todo
 
 covering
