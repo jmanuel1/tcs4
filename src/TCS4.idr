@@ -23,8 +23,8 @@ niceZip (x :: xs) (y :: ys) = (x, y) :: niceZip xs ys
 
 -- TODO: Experiment with `lookup`
 data Typeof : String -> Context -> TCS4Type -> Type where
-  Stop : (name : String) -> Typeof name (context :< (name, t)) t
-  Go : (name : String) -> Typeof name context t -> {0 _ : Not (name === other)} -> Typeof name (context :< (other, _)) t
+  Stop : (0 name : String) -> Typeof name (context :< (name, t)) t
+  Go : (0 name : String) -> Typeof name context t -> {0 _ : Not (name === other)} -> Typeof name (context :< (other, _)) t
 
 {- Syntax -}
 
@@ -52,12 +52,13 @@ data Expr : Context -> TCS4Type -> Type where
   Right : Expr context b -> Expr context (Sum a b)
   Case : Expr context (Sum a b) -> (left : String) -> Expr (context :< (left, a)) c -> (right : String) -> Expr (context :< (right, b)) c -> Expr context c
   Box : {0 bs : Vect n TCS4Type} ->
+        All (Expr context) (map Must bs) ->
+        -- the boxed stuff is first so that `boxVars` is in scope later in the type
         (boxVars : Vect n String) ->
         Expr (extend [<] (niceZip boxVars (map Must bs))) a ->
-        All (Expr context) (map Must bs) ->
         Expr context (Must a)
   Unbox : Expr context (Must a) -> Expr context a
-  Var : (var : String) -> {0 _ : Typeof var context a} -> Expr context a
+  Var : (var : String) -> {inContextProof : Typeof var context a} -> Expr context a
 
 {- Interpreter -}
 
@@ -106,7 +107,18 @@ eval env (Case scrutinee left lbody right rbody) =
   case eval env scrutinee of
     Left a => eval (env :< (left, a)) lbody
     Right b => eval (env :< (right, b)) rbody
-eval env a = ?todo
+eval env (Box boxExprs boxVars body) =
+  let boxes = mapAll (eval env) boxExprs in
+    eval (bind [<] boxVars boxes) body
+eval env (Unbox a) = eval env a
+eval env (Var name {inContextProof}) =
+  case inContextProof of
+    Stop _ =>
+      let (_ :< (_, val)) = env in
+        val
+    Go _ prf =>
+      let (env' :< _) = env in
+        eval env' (Var name {inContextProof=prf})
 
 covering
 evalClosed : Expr [<] a -> interpretType a
