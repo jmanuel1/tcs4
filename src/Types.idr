@@ -10,6 +10,8 @@ data TCS4Type : Type where
   Pair, Fun, Sum : TCS4Type -> TCS4Type -> TCS4Type
   -- M/diamond, L/box
   Command, Must : TCS4Type -> TCS4Type
+  -- Types corresponding to propositional variables
+  Prop : String -> TCS4Type
 
 public export
 interpretType : TCS4Type -> Type
@@ -21,6 +23,7 @@ interpretType (Fun a b) = interpretType a -> interpretType b
 interpretType (Sum a b) = Either (interpretType a) (interpretType b)
 interpretType (Command a) = IO (interpretType a)
 interpretType (Must a) = interpretType a
+interpretType (Prop _) = Builtin.Unit
 
 public export
 mustAInterpretedAsA : interpretType (Must a) === interpretType a

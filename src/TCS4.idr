@@ -1,7 +1,9 @@
 module TCS4
 
 import Data.DPair
+import Data.IORef
 import Data.SnocList
+import Data.So
 import Data.SortedMap
 import Data.Vect
 import Data.Vect.Quantifiers
@@ -22,9 +24,10 @@ niceZip [] [] = []
 niceZip (x :: xs) (y :: ys) = (x, y) :: niceZip xs ys
 
 -- TODO: Experiment with `lookup`
+-- TODO: If still using Stop/Go, make sure it compiles to nats
 data Typeof : String -> Context -> TCS4Type -> Type where
   Stop : (0 name : String) -> Typeof name (context :< (name, t)) t
-  Go : (0 name : String) -> Typeof name context t -> {0 _ : Not (name === other)} -> Typeof name (context :< (other, _)) t
+  Go : (0 name : String) -> Typeof name context t -> {auto 0 notThisOneProof : So (name /= other)} -> Typeof name (context :< (other, _)) t
 
 {- Syntax -}
 
@@ -40,10 +43,10 @@ data Expr : Context -> TCS4Type -> Type where
         (var : String) ->
         Expr context (Command computationResultType) ->
         Expr (extend [<(var, computationResultType)] (niceZip boxVars (map Must boxTypes))) (Command bodyResultType) ->
-        {0 boxTypes : Vect boundBoxCount TCS4Type} ->
+        {auto 0 boxTypes : Vect boundBoxCount TCS4Type} ->
         Expr context (Command bodyResultType)
   -- constants
-  IntNum : Integer -> Expr context IntNum
+  Constant : interpretType a -> Expr context a
   Absurd : Expr context Void -> Expr context a
   AbsurdCommand : Expr context (Command Void) -> Expr context a
   Lam : (var : String) -> Expr (context :< (var, a)) b -> Expr context (Fun a b)
@@ -81,6 +84,8 @@ sequenceAll [] = [| [] |]
 sequenceAll (x :: xs) = [| (::) x (sequenceAll xs) |]
 
 bind : Env context -> (names : Vect n String) -> {0 tcs4Types : Vect n TCS4Type} -> All Types.interpretType tcs4Types -> Env (extend context (niceZip names tcs4Types))
+bind env [] [] = env
+bind env (name :: names) (val :: vals) = bind (env :< (name, val)) names vals
 
 covering
 eval : Env context -> Expr context a -> interpretType a
@@ -93,7 +98,7 @@ eval env (Let exprs vars var computation body) = do
   computationResult <- eval env computation
   let boxes = mapAll (eval env) exprs
   eval (bind [<(var, computationResult)] vars boxes) body
-eval _ (IntNum a) = a
+eval _ (Constant a) = a
 eval env (Absurd a) = absurd (eval env a)
 eval env (AbsurdCommand a) =
   -- sorry
@@ -123,3 +128,35 @@ eval env (Var name {inContextProof}) =
 covering
 evalClosed : Expr [<] a -> interpretType a
 evalClosed a = eval [<] a
+
+{- The robot task from the TCS4 paper (example). -}
+Spec : TCS4Type
+Spec = Must (Command (Prop "light"))
+
+covering
+main : IO Builtin.Unit
+main = do
+  state <- newIORef "light"
+  let axSensor : Expr _ (Must (Command (Sum (Prop "light") (Prop "dark"))))
+      axSensor = Box {bs=[]} [] [] (Constant $ do
+        s <- readIORef state
+        pure {f=IO} (if s == "light" then Prelude.Left () else Prelude.Right ()))
+  let axToggle1 : Expr _ (Must (Fun (Prop "dark") (Command (Prop "light"))))
+      axToggle1 = Box {bs=[]} [] [] (Constant $ \_ => writeIORef {io=IO} state "light")
+  let axToggle2 : Expr _ (Must (Fun (Prop "light") (Command (Prop "dark"))))
+      axToggle2 = Box {bs=[]} [] [] (Constant $ \_ => writeIORef {io=IO} state "dark")
+  let e : Expr _ Spec
+      e = Box {bs=[]}
+        []
+        []
+        (Let {boxTypes=[Fun (Prop "dark") (Command (Prop "light"))]}
+          [axToggle1]
+          ["w"]
+          "z"
+          (Unbox axSensor)
+          (Case {a=Prop "light", b=Prop "dark"} (Var {inContextProof=Go "z" (Stop "z")} "z") "u" (Pure (Var {inContextProof=Stop "u"} "u")) "v" (App (Unbox (Var {inContextProof=Go "w" (Stop "w")} "w")) (Var {inContextProof=Stop "v"} "v"))))
+  evalClosed e
+  putStrLn !(readIORef state)
+  writeIORef state "dark"
+  evalClosed e
+  putStrLn !(readIORef state)
