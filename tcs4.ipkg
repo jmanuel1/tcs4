@@ -13,7 +13,7 @@ package tcs4
 depends = contrib
 
 -- modules to install
-modules = TCS4, Types
+modules = Context, Syntax, TCS4, Types
 
 -- main file (i.e. file to load at REPL)
 -- main =
