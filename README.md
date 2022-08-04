@@ -1,6 +1,9 @@
 # TCS4
 
-https://core.ac.uk/download/pdf/82173346.pdf
+An intrinsically-typed implementation of the type theory TCS4 described in
+["Monad as modality" (Kobayashi, 1997)](https://core.ac.uk/download/pdf/82173346.pdf). The modal types are
+interpreted as staging of computation. I think Kobayashi refers to this use case
+as "program extraction."
 
 ## Related
 * https://www.cs.cmu.edu/~fp/courses/15816-s10/lectures/04-compmodal.pdf:

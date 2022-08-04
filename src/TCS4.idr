@@ -9,31 +9,24 @@ import Data.SortedMap
 import Data.Vect
 import Data.Vect.Quantifiers
 import Syntax
+import TCS4Types
 import Types
 
 %default total
 
 {- Interpreter -}
 
-data Env : Context -> Type where
-  Lin : Env [<]
-  (:<) : Env context -> (binding : (String, interpretType a)) -> Env (context :< (fst binding, a))
-
-data ErrorMessage = {-UnknownVar String |-} TODO
-
-Error : Type
-Error = (ErrorMessage, Exists (Prelude.uncurry Expr))
+covering
+Env : Context -> Type
+Env = Types.Env Expr
 
 -- QUESTION: Is there a library for "heterogeneous functors" and what not?
 mapAll : (f : forall x. prop x -> prop2 x) -> All prop xs -> All prop2 xs
 mapAll _ [] = []
 mapAll f (x :: xs) = f x :: mapAll f xs
 
-sequenceAll : Applicative f => All (f . prop) xs -> f (All prop xs)
-sequenceAll [] = [| [] |]
-sequenceAll (x :: xs) = [| (::) x (sequenceAll xs) |]
-
-bind : Env context -> (names : Vect n String) -> {0 tcs4Types : Vect n TCS4Type} -> All Types.interpretType tcs4Types -> Env (extend context (niceZip names tcs4Types))
+covering
+bind : Env context -> (names : Vect n String) -> {0 tcs4Types : Vect n TCS4Type} -> All Syntax.interpretType tcs4Types -> Env (extend context (niceZip names tcs4Types))
 bind env [] [] = env
 bind env (name :: names) (val :: vals) = bind (env :< (name, val)) names vals
 
@@ -64,8 +57,12 @@ eval env (Case scrutinee left lbody right rbody) =
     Right b => eval (env :< (right, b)) rbody
 eval env (Box boxExprs boxVars body) =
   let boxes = mapAll (eval env) boxExprs in
-    eval (bind [<] boxVars boxes) body
-eval env (Unbox a) = eval env a
+    -- QUESTION: Can I do substitution instead so I can return just a closed
+    -- term? Is that worth the effort?
+    Evidence _ (bind [<] boxVars boxes, body)
+eval env (Unbox box) =
+  let Evidence _ (env, expr) = eval env box in
+    eval env expr
 eval env (Var name {inContextProof}) =
   case inContextProof of
     Stop _ =>
@@ -96,6 +93,7 @@ main = do
   let axToggle2 : Expr _ (Must (Fun (Prop "light") (Command (Prop "dark"))))
       axToggle2 = Box {bs=[]} [] [] (Constant $ \_ => writeIORef {io=IO} state "dark")
   let e : Expr _ Spec
+      -- TODO: Remove implicit arguments
       e = Box {bs=[]}
         []
         []
@@ -104,9 +102,12 @@ main = do
           ["w"]
           "z"
           (Unbox axSensor)
+          -- TODO: Remove manual context proofs
           (Case {a=Prop "light", b=Prop "dark"} (Var {inContextProof=Go "z" (Stop "z")} "z") "u" (Pure (Var {inContextProof=Stop "u"} "u")) "v" (App (Unbox (Var {inContextProof=Go "w" (Stop "w")} "w")) (Var {inContextProof=Stop "v"} "v"))))
-  evalClosed e
+  let Evidence _ (env, expr) = evalClosed e
+  eval env expr
   putStrLn !(readIORef state)
   writeIORef state "dark"
-  evalClosed e
+  let Evidence _ (env, expr) = evalClosed e
+  eval env expr
   putStrLn !(readIORef state)

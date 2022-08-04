@@ -1,30 +1,27 @@
 module Types
 
+import Context
+import Data.DPair
+import public TCS4Types
+
 %default total
 
-{- Types -}
+{- Environment -}
 
-public export
-data TCS4Type : Type where
-  Unit, IntNum, Void : TCS4Type
-  Pair, Fun, Sum : TCS4Type -> TCS4Type -> TCS4Type
-  -- M/diamond, L/box
-  Command, Must : TCS4Type -> TCS4Type
-  -- Types corresponding to propositional variables
-  Prop : String -> TCS4Type
+mutual
+  public export
+  data Env : (0 expr : Context -> TCS4Type -> Type) -> Context -> Type where
+    Lin : Env expr [<]
+    (:<) : Env expr context -> (binding : (String, interpretType' expr a)) -> Env expr (context :< (fst binding, a))
 
-public export
-interpretType : TCS4Type -> Type
-interpretType Unit = Builtin.Unit
-interpretType IntNum = Integer
-interpretType Void = Void
-interpretType (Pair a b) = (interpretType a, interpretType b)
-interpretType (Fun a b) = interpretType a -> interpretType b
-interpretType (Sum a b) = Either (interpretType a) (interpretType b)
-interpretType (Command a) = IO (interpretType a)
-interpretType (Must a) = interpretType a
-interpretType (Prop _) = Builtin.Unit
-
-public export
-mustAInterpretedAsA : interpretType (Must a) === interpretType a
-mustAInterpretedAsA = Refl
+  public export
+  0 interpretType' : (Context -> TCS4Type -> Type) -> TCS4Type -> Type
+  interpretType' expr Unit = Builtin.Unit
+  interpretType' expr IntNum = Integer
+  interpretType' expr Void = Void
+  interpretType' expr (Pair a b) = (interpretType' expr a, interpretType' expr b)
+  interpretType' expr (Fun a b) = interpretType' expr a -> interpretType' expr b
+  interpretType' expr (Sum a b) = Either (interpretType' expr a) (interpretType' expr b)
+  interpretType' expr (Command a) = IO (interpretType' expr a)
+  interpretType' expr (Must a) = Exists (\context => (Env expr context, expr context a))
+  interpretType' expr (Prop _) = Builtin.Unit

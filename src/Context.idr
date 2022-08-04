@@ -2,7 +2,7 @@ module Context
 
 import Data.SnocList
 import Data.Vect
-import Types
+import TCS4Types
 
 %default total
 
