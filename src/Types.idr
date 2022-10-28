@@ -2,6 +2,7 @@ module Types
 
 import Context
 import Data.DPair
+import Data.IORef
 import public TCS4Types
 
 %default total
@@ -25,3 +26,4 @@ mutual
   interpretType' expr (Command a) = IO (interpretType' expr a)
   interpretType' expr (Must a) = Exists (\context => (Env expr context, expr context a))
   interpretType' expr (Prop _) = Builtin.Unit
+  interpretType' expr (Store a) = IORef (interpretType' expr a)

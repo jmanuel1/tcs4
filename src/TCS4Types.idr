@@ -1,5 +1,7 @@
 module TCS4Types
 
+%default total
+
 {- Types -}
 
 public export
@@ -10,3 +12,5 @@ data TCS4Type : Type where
   Command, Must : TCS4Type -> TCS4Type
   -- Types corresponding to propositional variables
   Prop : String -> TCS4Type
+  -- References
+  Store : TCS4Type -> TCS4Type

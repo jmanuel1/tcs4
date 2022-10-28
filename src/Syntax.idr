@@ -6,9 +6,8 @@ import Data.Vect.Quantifiers
 import TCS4Types
 import Types
 
-%default covering
+%default total
 
--- QUESTION: Can I make Expr total?
 mutual
   public export
   0 interpretType : TCS4Type -> Type
@@ -21,18 +20,18 @@ mutual
     First : Expr context (Pair a b) -> Expr context a
     Second : Expr context (Pair a b) -> Expr context b
     Pure : Expr context a -> Expr context (Command a)
-    Let : All (Expr context) (map Must boxTypes) ->
-          -- the boxed stuff is first so that `boxVars` is in scope later in the type
+    -- the boxed stuff is first so that `boxVars` and `boxTypes` are in
+    -- scope later in the type
+    Let : {0 boxTypes : Vect boundBoxCount TCS4Type} ->
+          All (Expr context) (map Must boxTypes) ->
           (boxVars : Vect boundBoxCount String) ->
           (var : String) ->
           Expr context (Command computationResultType) ->
           Expr (extend [<(var, computationResultType)] (niceZip boxVars (map Must boxTypes))) (Command bodyResultType) ->
-          {auto 0 boxTypes : Vect boundBoxCount TCS4Type} ->
           Expr context (Command bodyResultType)
-    -- constants
-    -- I think this what makes Expr possibly non-total according to Idris,
-    -- because `interpretType a` could contain an expression.
-    Constant : interpretType a -> Expr context a
+    Ref : Expr context a -> Expr context (Command (Store a))
+    Get : Expr context (Store a) -> Expr context (Command a)
+    Set : Expr context (Store a) -> Expr context a -> Expr context (Command Unit)
     Absurd : Expr context Void -> Expr context a
     AbsurdCommand : Expr context (Command Void) -> Expr context a
     Lam : (var : String) -> Expr (context :< (var, a)) b -> Expr context (Fun a b)
