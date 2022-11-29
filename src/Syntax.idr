@@ -16,6 +16,13 @@ mutual
   public export
   data Expr : Context -> TCS4Type -> Type where
     Unit : Expr context Unit
+    Natural : Nat -> Expr context NatNum
+    NatElim : Expr context a -> -- zero case
+              Expr context (a `Fun` a) -> -- successor case (argument is result of the recursive call)
+              Expr context NatNum ->
+              Expr context a
+    -- TODO: Define multiplication within the language
+    Mult : Expr context NatNum -> Expr context NatNum -> Expr context NatNum
     Pair : Expr context a -> Expr context b -> Expr context (Pair a b)
     First : Expr context (Pair a b) -> Expr context a
     Second : Expr context (Pair a b) -> Expr context b

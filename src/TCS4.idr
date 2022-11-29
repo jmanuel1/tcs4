@@ -33,6 +33,11 @@ bind env (name :: names) (val :: vals) = bind (env :< (name, val)) names vals
 covering
 eval : Env context -> Expr context a -> interpretType a
 eval _ Unit = ()
+eval _ (Natural n) = n
+eval env (NatElim zero succ n) = case eval env n of
+  Z => eval env zero
+  S n' => (eval env succ) (eval env (NatElim zero succ (Natural n')))
+eval env (Mult n m) = eval env n * eval env m
 eval env (Pair a b) = (eval env a, eval env b)
 eval env (First a) = fst (eval env a)
 eval env (Second a) = snd (eval env a)
@@ -41,7 +46,9 @@ eval env (Let exprs vars var computation body) = do
   computationResult <- eval env computation
   let boxes = mapAll (eval env) exprs
   eval (bind [<(var, computationResult)] vars boxes) body
-eval _ (Constant a) = a
+eval env (Ref a) = newIORef (eval env a)
+eval env (Get a) = readIORef (eval env a)
+eval env (Set store value) = writeIORef (eval env store) (eval env value)
 eval env (Absurd a) = absurd (eval env a)
 eval env (AbsurdCommand a) =
   -- sorry
@@ -76,38 +83,22 @@ covering
 evalClosed : Expr [<] a -> interpretType a
 evalClosed a = eval [<] a
 
-{- The robot task from the TCS4 paper (example). -}
+{- https://www.cs.cmu.edu/~fp/courses/15816-s10/lectures/04-compmodal.pdf -}
 Spec : TCS4Type
-Spec = Must (Command (Prop "light"))
+Spec = NatNum `Fun` Must (NatNum `Fun` NatNum)
+
+eval' : Expr context (Must a `Fun` a)
+eval' = Lam "x" (Unbox (Var {inContextProof=Stop "x"} "x"))
 
 covering
 main : IO Builtin.Unit
 main = do
-  state <- newIORef "light"
-  let axSensor : Expr _ (Must (Command (Sum (Prop "light") (Prop "dark"))))
-      axSensor = Box {bs=[]} [] [] (Constant $ do
-        s <- readIORef state
-        pure {f=IO} (if s == "light" then Prelude.Left () else Prelude.Right ()))
-  let axToggle1 : Expr _ (Must (Fun (Prop "dark") (Command (Prop "light"))))
-      axToggle1 = Box {bs=[]} [] [] (Constant $ \_ => writeIORef {io=IO} state "light")
-  let axToggle2 : Expr _ (Must (Fun (Prop "light") (Command (Prop "dark"))))
-      axToggle2 = Box {bs=[]} [] [] (Constant $ \_ => writeIORef {io=IO} state "dark")
-  let e : Expr _ Spec
-      -- TODO: Remove implicit arguments
-      e = Box {bs=[]}
-        []
-        []
-        (Let {boxTypes=[Fun (Prop "dark") (Command (Prop "light"))]}
-          [axToggle1]
-          ["w"]
-          "z"
-          (Unbox axSensor)
-          -- TODO: Remove manual context proofs
-          (Case {a=Prop "light", b=Prop "dark"} (Var {inContextProof=Go "z" (Stop "z")} "z") "u" (Pure (Var {inContextProof=Stop "u"} "u")) "v" (App (Unbox (Var {inContextProof=Go "w" (Stop "w")} "w")) (Var {inContextProof=Stop "v"} "v"))))
-  let Evidence _ (env, expr) = evalClosed e
-  eval env expr
-  putStrLn !(readIORef state)
-  writeIORef state "dark"
-  let Evidence _ (env, expr) = evalClosed e
-  eval env expr
-  putStrLn !(readIORef state)
+  let stagedExp : forall context. Expr context Spec
+      stagedExp = Lam "n" (NatElim
+        (Box {bs=[]} [] [] (Lam "b" (Natural 1)))
+        (Lam "exp'" (Box {bs=[NatNum `Fun` NatNum]} [Var {inContextProof=Stop "exp'"} "exp'"] ["exp''"] (Lam "b" (Var {inContextProof=Stop "b"} "b" `Mult` (Unbox (Var {inContextProof=Go "exp''" (Stop "exp''")} "exp''") `App` Var {inContextProof=Stop "b"} "b")))))
+        (Var {inContextProof=Stop "n"} "n"))
+  let e : forall context. Expr context NatNum
+      e = (eval' `App` (stagedExp `App` Natural 5)) `App` Natural 2
+  printLn $ evalClosed e
+  pure ()

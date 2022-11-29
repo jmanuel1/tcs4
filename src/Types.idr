@@ -19,6 +19,7 @@ mutual
   0 interpretType' : (Context -> TCS4Type -> Type) -> TCS4Type -> Type
   interpretType' expr Unit = Builtin.Unit
   interpretType' expr IntNum = Integer
+  interpretType' expr NatNum = Nat
   interpretType' expr Void = Void
   interpretType' expr (Pair a b) = (interpretType' expr a, interpretType' expr b)
   interpretType' expr (Fun a b) = interpretType' expr a -> interpretType' expr b

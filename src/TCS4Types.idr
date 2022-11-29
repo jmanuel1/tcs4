@@ -6,7 +6,7 @@ module TCS4Types
 
 public export
 data TCS4Type : Type where
-  Unit, IntNum, Void : TCS4Type
+  Unit, IntNum, NatNum, Void : TCS4Type
   Pair, Fun, Sum : TCS4Type -> TCS4Type -> TCS4Type
   -- M/diamond, L/box
   Command, Must : TCS4Type -> TCS4Type
